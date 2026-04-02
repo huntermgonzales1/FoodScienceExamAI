@@ -1,5 +1,6 @@
 import datetime
 import os
+import uuid
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -20,6 +21,13 @@ def init_supabase():
     )
 
 
+@st.cache_resource
+def auth_store():
+    # Server-side session store for this Streamlit process.
+    # Key: session_id, Value: dict with user/session info.
+    return {}
+
+
 def init_auth_state():
     if "user" not in st.session_state:
         st.session_state.user = None
@@ -29,14 +37,37 @@ def init_auth_state():
         st.session_state.code_sent = False
 
 
+def get_query_params() -> dict:
+    try:
+        qp = st.query_params
+        return {k: qp[k] for k in qp.keys()}
+    except Exception:
+        qp = st.experimental_get_query_params()
+        return {k: (v[0] if isinstance(v, list) and v else "") for k, v in qp.items()}
+
+
+def set_query_param(key: str, value: str):
+    try:
+        st.query_params[key] = value
+    except Exception:
+        # Older Streamlit
+        params = st.experimental_get_query_params()
+        params[key] = value
+        st.experimental_set_query_params(**params)
+
+
+def clear_query_params():
+    try:
+        st.query_params.clear()
+    except Exception:
+        st.experimental_set_query_params()
+
+
 def send_login_code(supabase, email: str):
-    # Sends a one-time email code.
-    # In Supabase Auth email template, use {{ .Token }} instead of {{ .ConfirmationURL }}.
     return supabase.auth.sign_in_with_otp({"email": email})
 
 
 def verify_login_code(supabase, email: str, code: str):
-    # Verify the OTP the user typed into the app.
     return supabase.auth.verify_otp(
         {
             "email": email,
@@ -46,15 +77,46 @@ def verify_login_code(supabase, email: str, code: str):
     )
 
 
+def restore_session_from_sid():
+    params = get_query_params()
+    sid = params.get("sid")
+    if not sid:
+        return
+
+    saved = auth_store().get(sid)
+    if not saved:
+        return
+
+    st.session_state.user = {"email": saved["email"]}
+    st.session_state.email = saved["email"]
+
+
 def main():
     st.set_page_config(page_title="Food Science Exam", layout="centered")
     supabase = init_supabase()
     init_auth_state()
 
+    # Restore login after refresh
+    restore_session_from_sid()
+
     # Dev bypass
     with st.sidebar:
         if st.button("Dev: Skip Login"):
             st.session_state.user = {"email": "dev@test.com"}
+            sid = uuid.uuid4().hex
+            auth_store()[sid] = {"email": "dev@test.com"}
+            set_query_param("sid", sid)
+            st.rerun()
+
+        if st.session_state.user is not None and st.button("Logout"):
+            params = get_query_params()
+            sid = params.get("sid")
+            if sid and sid in auth_store():
+                del auth_store()[sid]
+            st.session_state.user = None
+            st.session_state.email = ""
+            st.session_state.code_sent = False
+            clear_query_params()
             st.rerun()
 
     # Auth gate
@@ -63,6 +125,7 @@ def main():
 
         if not st.session_state.code_sent:
             email = st.text_input("University Email", value=st.session_state.email)
+
             if st.button("Send Code"):
                 email = email.strip().lower()
 
@@ -100,13 +163,21 @@ def main():
                         code,
                     )
 
-                    # Store a simple logged-in marker and user info if available.
-                    user = getattr(response, "user", None)
-                    if user is None and getattr(response, "session", None):
-                        user = getattr(response.session, "user", None)
+                    # Save a server-side session keyed by a browser-visible sid
+                    sid = uuid.uuid4().hex
 
-                    st.session_state.user = user or {"email": st.session_state.email}
+                    # Store only what you need
+                    auth_store()[sid] = {
+                        "email": st.session_state.email,
+                        "user": getattr(response, "user", None),
+                        "session": getattr(response, "session", None),
+                    }
+
+                    st.session_state.user = {"email": st.session_state.email}
                     st.session_state.code_sent = False
+                    set_query_param("sid", sid)
+                    clear_query_params()  # if you want to remove the OTP code from the URL
+                    set_query_param("sid", sid)
                     st.rerun()
 
                 except Exception as e:
