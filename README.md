@@ -9,7 +9,10 @@ In a senior level class like the one this is being made for, most exams end up j
 To solve this problem, we will use an AI system to aid in the grading process. The Institute of Food Technologies (IFT) recently built an AI system called CoDeveloper that has been trained on all of their published food science journals. I will build a system that will connect to this AI system via an API and grade student's responses to the problems and give a confidence score so the professor can know which students he should double check.
 
 ## General System Design
-<img src="System_design.png" width = "400">
+<img src="System_design.jpeg" width = "400">
+
+## ERD diagram in Supabase
+<img src="ERD.png" width = "400">
 
 
 ## Daily Goals
