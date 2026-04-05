@@ -8,4 +8,5 @@
 | 3/30/2026 | Meet with Dr. Kershaw and create initial Steamlit app |3 |
 | 4/1/2026 | Set up Supabase and allow for sign in with email | 5.5 |
 | 4/2/2026 | Setup more Supabase tables and prepare for ERD interview | 2 |
-| **Total** | | **12.5** |
+| 4/4/2026 | Improve database schema and document in schema.sql | 2 |
+| **Total** | | **14.5** |
