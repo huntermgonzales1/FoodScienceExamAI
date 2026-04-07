@@ -9,4 +9,6 @@
 | 4/1/2026 | Set up Supabase and allow for sign in with email | 5.5 |
 | 4/2/2026 | Setup more Supabase tables and prepare for ERD interview | 2 |
 | 4/4/2026 | Improve database schema and document in schema.sql | 2 |
-| **Total** | | **14.5** |
+| 4/6/2026 | Collaborate, meet with Dr. Kershaw, and improve schema | 1.5 |
+| 4/7/2026 | connect streamlit chat to DB; modularize code |  |
+| **Total** | | **16.0** |

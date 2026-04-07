@@ -1,31 +1,13 @@
 import datetime
-import os
 import uuid
 
 import streamlit as st
 from dotenv import load_dotenv
-from google import genai
-from supabase import create_client
+
+from database import auth_store, init_supabase, send_login_code, verify_login_code
+from tools import get_gemini_response
 
 load_dotenv()
-
-client = genai.Client()
-MODEL_ID = "gemini-3-flash-preview"
-
-
-@st.cache_resource
-def init_supabase():
-    return create_client(
-        st.secrets["SUPABASE_URL"],
-        st.secrets["SUPABASE_PUBLISHABLE_KEY"],
-    )
-
-
-@st.cache_resource
-def auth_store():
-    # Server-side session store for this Streamlit process.
-    # Key: session_id, Value: dict with user/session info.
-    return {}
 
 
 def init_auth_state():
@@ -61,20 +43,6 @@ def clear_query_params():
         st.query_params.clear()
     except Exception:
         st.experimental_set_query_params()
-
-
-def send_login_code(supabase, email: str):
-    return supabase.auth.sign_in_with_otp({"email": email})
-
-
-def verify_login_code(supabase, email: str, code: str):
-    return supabase.auth.verify_otp(
-        {
-            "email": email,
-            "token": code,
-            "type": "email",
-        }
-    )
 
 
 def restore_session_from_sid():
@@ -199,17 +167,6 @@ def main():
     if "log_file" not in st.session_state:
         st.session_state.log_file = f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 
-    SYSTEM_PROMPT = """
-    Act as a Senior Food Science Exam Proctor. The student is solving a case study about a strawberry protein bar
-    turning brown (Maillard reaction).
-    Follow these rules:
-    1. Do NOT give away the answer.
-    2. Use the 'Analytical Approach': First, they must hypothesize reactions.
-    Then, they must design an experiment with an independent and dependent variable.
-    3. If they propose a valid experiment, simulate the result (e.g., 'Lowering the pH slowed the browning').
-    4. Grade them based on terms like 'Maillard reaction', 'reducing sugars', and 'water activity'.
-    """
-
     st.title("Food Science Lab: Case Study Exam")
     st.subheader("Scenario: The Browning Strawberry Bar")
     st.info("""
@@ -230,12 +187,7 @@ def main():
             f.write(f"USER: {prompt}\n")
 
         try:
-            chat = client.chats.create(
-                model=MODEL_ID,
-                config={"system_instruction": SYSTEM_PROMPT},
-            )
-            response = chat.send_message(prompt)
-            ai_response = response.text
+            ai_response = get_gemini_response(prompt)
 
             st.session_state.messages.append({"role": "assistant", "content": ai_response})
             with st.chat_message("assistant"):
