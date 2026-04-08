@@ -173,15 +173,18 @@ def main():
     st.info(prompt_question["scenario_text"])
     st.write(prompt_question["info_text"])
 
-    if current_chat["status"] == CHAT_STATUS_GRADED:
-        st.success(
-            f"Final grade: {current_chat['final_grade']}/10\n\n"
-            f"{current_chat['grade_justification']}"
-        )
-
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+    if current_chat["status"] == CHAT_STATUS_GRADED:
+        st.success(f"Final grade: {current_chat['final_grade']}/10")
+        st.write(current_chat["grade_justification"])
+        st.info(
+            "This exam attempt has been finalized and can no longer receive new "
+            "messages. If you believe this grading was unreasonable, please contact "
+            "your professor."
+        )
 
     chat_is_active = current_chat["status"] == CHAT_STATUS_ACTIVE
 
