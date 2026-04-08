@@ -21,6 +21,11 @@ CREATE POLICY "users create their own chats"
 ON chat FOR INSERT
 WITH CHECK (user_id = auth.uid());
 
+CREATE POLICY "users update own chats"
+ON chat FOR UPDATE
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
 
 
 -- Students view own

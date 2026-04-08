@@ -4,14 +4,18 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from database import (
+    CHAT_STATUS_ACTIVE,
+    CHAT_STATUS_GRADED,
     auth_store,
     create_chat_message,
+    get_current_chat_for_prompt,
     get_chat_messages,
-    get_or_create_active_chat,
     get_prompt_question,
+    init_admin_supabase,
     init_authenticated_supabase,
     init_supabase,
     send_login_code,
+    update_chat_grade,
     verify_login_code,
 )
 from streamlit_helpers import (
@@ -21,10 +25,15 @@ from streamlit_helpers import (
     restore_session_from_sid,
     set_query_param,
 )
-from tools import get_gemini_response
+from tools import get_gemini_response, grade_chat_with_gemini
 
 load_dotenv()
 PROMPT_ID = "21b23642-6bf2-4777-bef0-394c2aafb071"
+DEFAULT_GRADING_PROMPT = (
+    "Score this submission from 0 to 10. Reward scientifically grounded reasoning, "
+    "good use of the case facts, clear experimental design, and actionable next "
+    "steps. Penalize vague claims, unsupported conclusions, or missing justification."
+)
 
 
 def main():
@@ -143,16 +152,17 @@ def main():
         return
 
     db = init_authenticated_supabase(access_token)
+    admin_db = init_admin_supabase()
 
     try:
         prompt_question = get_prompt_question(db, PROMPT_ID)
-        active_chat = get_or_create_active_chat(db, user_id, PROMPT_ID)
-        chat_messages = get_chat_messages(db, active_chat["chat_id"])
+        current_chat = get_current_chat_for_prompt(db, user_id, PROMPT_ID)
+        chat_messages = get_chat_messages(db, current_chat["chat_id"])
     except Exception as e:
         st.error(f"Error loading exam data: {e}")
         return
 
-    st.session_state.chat_id = active_chat["chat_id"]
+    st.session_state.chat_id = current_chat["chat_id"]
     st.session_state.messages = [
         {"role": message["role"], "content": message["content"]}
         for message in chat_messages
@@ -163,11 +173,22 @@ def main():
     st.info(prompt_question["scenario_text"])
     st.write(prompt_question["info_text"])
 
+    if current_chat["status"] == CHAT_STATUS_GRADED:
+        st.success(
+            f"Final grade: {current_chat['final_grade']}/10\n\n"
+            f"{current_chat['grade_justification']}"
+        )
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("What is your hypothesis or proposed experiment?"):
+    chat_is_active = current_chat["status"] == CHAT_STATUS_ACTIVE
+
+    if prompt := st.chat_input(
+        "What is your hypothesis or proposed experiment?",
+        disabled=not chat_is_active,
+    ):
         user_message = {"role": "user", "content": prompt}
         st.session_state.messages.append(user_message)
         with st.chat_message("user"):
@@ -190,10 +211,31 @@ def main():
             st.error(f"Error calling Gemini: {e}")
 
     with st.sidebar:
-        st.header("Admin Controls")
-        if st.button("Finalize and Grade"):
-            st.warning("Sending full transcript to Gemini for grading...")
-            # Grading logic would go here
+        st.header("Exam Controls")
+        if current_chat["status"] == CHAT_STATUS_GRADED:
+            st.caption("This attempt has already been finalized and graded.")
+
+        finalize_disabled = (not chat_is_active) or (len(st.session_state.messages) == 0)
+        if st.button("Finalize and Grade", disabled=finalize_disabled):
+            with st.spinner("Sending the full transcript to Gemini for grading..."):
+                try:
+                    grading_result = grade_chat_with_gemini(
+                        prompt_question=prompt_question,
+                        messages=st.session_state.messages,
+                        grading_prompt=DEFAULT_GRADING_PROMPT,
+                    )
+                    updated_chat = update_chat_grade(
+                        admin_db,
+                        st.session_state.chat_id,
+                        final_grade=grading_result["grade"],
+                        grade_justification=grading_result["justification"],
+                    )
+                    st.success(
+                        f"Saved grade {updated_chat['final_grade']}/10 to the database."
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error finalizing and grading chat: {e}")
 
 
 if __name__ == "__main__":
