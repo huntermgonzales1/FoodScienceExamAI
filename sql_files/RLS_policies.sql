@@ -1,90 +1,66 @@
-
+-- Enable RLS on all tables
 ALTER TABLE allowed_emails ENABLE ROW LEVEL SECURITY;
-
+ALTER TABLE user_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prompt_question ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_message ENABLE ROW LEVEL SECURITY;
-ALTER TABLE prompt_question ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_profile ENABLE ROW LEVEL SECURITY;
 
--- Students view own
-CREATE POLICY "students can view own chats"
-ON chat FOR SELECT
-USING (user_id = auth.uid());
+----------------------------------------------------------------
+-- ALLOWED EMAILS & PROMPTS
+----------------------------------------------------------------
+-- Allow the internal Auth service to read the whitelist
+CREATE POLICY "service_can_read_whitelist" 
+ON public.allowed_emails FOR SELECT USING (true);
 
--- Instructors view all (No subquery!)
-CREATE POLICY "instructors can view all chats"
-ON chat FOR SELECT
+-- Instructors manage the whitelist and exam prompts
+CREATE POLICY "instructors_manage_whitelist" 
+ON public.allowed_emails FOR ALL 
 USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
 
--- Users create own
-CREATE POLICY "users create their own chats"
-ON chat FOR INSERT
-WITH CHECK (user_id = auth.uid());
+CREATE POLICY "instructors_manage_prompts" 
+ON public.prompt_question FOR ALL 
+USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
 
-CREATE POLICY "users update own chats"
-ON chat FOR UPDATE
-USING (user_id = auth.uid())
-WITH CHECK (user_id = auth.uid());
+-- Authorized students can read exam prompts
+CREATE POLICY "authorized_read_prompts" 
+ON public.prompt_question FOR SELECT 
+USING ((auth.jwt() -> 'app_metadata' ->> 'is_authorized')::boolean = true);
 
+----------------------------------------------------------------
+-- USER PROFILES & CHATS
+----------------------------------------------------------------
+-- Users see own profile; Instructors see all
+CREATE POLICY "view_profiles" ON public.user_profile FOR SELECT 
+USING (
+    auth.uid() = user_id 
+    OR (auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true
+);
 
+-- Users manage own chats
+CREATE POLICY "users_manage_own_chats" ON public.chat FOR ALL 
+USING (auth.uid() = user_id);
 
--- Students view own
-CREATE POLICY "students view own messages"
-ON chat_message FOR SELECT
+-- Instructors view all chats
+CREATE POLICY "instructors_view_all_chats" ON public.chat FOR SELECT 
+USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
+
+-- Messages are visible if you own the parent chat
+CREATE POLICY "view_own_chat_messages" ON public.chat_message FOR SELECT 
 USING (
     EXISTS (
-        SELECT 1 FROM chat 
+        SELECT 1 FROM public.chat 
         WHERE chat.chat_id = chat_message.chat_id 
         AND chat.user_id = auth.uid()
     )
 );
 
--- Instructors view all
-CREATE POLICY "instructors view all messages"
-ON chat_message FOR SELECT
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
-
-
-CREATE POLICY "users insert own messages"
-ON chat_message FOR INSERT
+-- Users can only insert messages into their own active chats
+CREATE POLICY "insert_own_messages" ON public.chat_message FOR INSERT 
 WITH CHECK (
     EXISTS (
-        SELECT 1
-        FROM chat
-        WHERE chat.chat_id = chat_message.chat_id
-          AND chat.user_id = auth.uid()
-    )
-    AND role IN ('user', 'assistant')
-);
-
-
-CREATE POLICY "students read prompts"
-ON prompt_question
-FOR SELECT
-USING (TRUE);
-
-CREATE POLICY "instructors manage prompts"
-ON prompt_question FOR ALL
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
-
-
-CREATE POLICY "users read own profile"
-ON user_profile
-FOR SELECT
-USING (user_id = auth.uid());
-
-CREATE POLICY "instructors read profiles"
-ON user_profile
-FOR SELECT
-USING ( 
-    EXISTS (
-        SELECT 1
-        FROM user_profile p
-        WHERE p.user_id = auth.uid()
-        AND p.is_instructor
+        SELECT 1 FROM public.chat 
+        WHERE chat.chat_id = chat_message.chat_id 
+        AND chat.user_id = auth.uid()
+        AND chat.status = 'active'
     )
 );
-
-CREATE POLICY "instructors manage allowed_emails"
-ON allowed_emails FOR ALL
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);

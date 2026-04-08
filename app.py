@@ -102,31 +102,35 @@ def main():
                     st.warning("Enter the code from your email.")
                     st.stop()
 
+                # In the 'with col1:' block of your modified app.py
                 try:
-                    response = verify_login_code(
-                        supabase,
-                        st.session_state.email,
-                        code,
-                    )
+                    response = verify_login_code(supabase, st.session_state.email, code)
+                    user = getattr(response, "user", None)
+                    
+                    # 1. GET THE AUTHORIZATION STATUS FROM METADATA
+                    # This matches the 'is_authorized' key we set in the SQL trigger
+                    app_metadata = getattr(user, "app_metadata", {})
+                    is_authorized = app_metadata.get("is_authorized", False)
 
-                    # Save a server-side session keyed by a browser-visible sid
+                    # 2. THE GATEKEEPER
+                    if not is_authorized:
+                        st.error("Access Denied: Your email is not on the authorized whitelist.")
+                        st.stop() # Stops execution before any session is saved
+
+                    # 3. IF AUTHORIZED, PROCEED
                     sid = uuid.uuid4().hex
-
-                    # Store only what you need
                     auth_store()[sid] = {
                         "email": st.session_state.email,
-                        "user": getattr(response, "user", None),
+                        "user": user,
                         "session": getattr(response, "session", None),
                     }
 
                     st.session_state.user = {
                         "email": st.session_state.email,
-                        "id": getattr(getattr(response, "user", None), "id", None),
+                        "id": getattr(user, "id", None),
                     }
                     st.session_state.supabase_session = getattr(response, "session", None)
                     st.session_state.code_sent = False
-                    set_query_param("sid", sid)
-                    clear_query_params()  # if you want to remove the OTP code from the URL
                     set_query_param("sid", sid)
                     st.rerun()
 
