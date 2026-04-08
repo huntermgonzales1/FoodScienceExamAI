@@ -1,62 +1,30 @@
-import datetime
 import uuid
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from database import auth_store, init_supabase, send_login_code, verify_login_code
+from database import (
+    auth_store,
+    create_chat_message,
+    get_chat_messages,
+    get_or_create_active_chat,
+    get_prompt_question,
+    init_authenticated_supabase,
+    init_supabase,
+    send_login_code,
+    verify_login_code,
+)
+from streamlit_helpers import (
+    clear_query_params,
+    get_query_params,
+    init_auth_state,
+    restore_session_from_sid,
+    set_query_param,
+)
 from tools import get_gemini_response
 
 load_dotenv()
-
-
-def init_auth_state():
-    if "user" not in st.session_state:
-        st.session_state.user = None
-    if "email" not in st.session_state:
-        st.session_state.email = ""
-    if "code_sent" not in st.session_state:
-        st.session_state.code_sent = False
-
-
-def get_query_params() -> dict:
-    try:
-        qp = st.query_params
-        return {k: qp[k] for k in qp.keys()}
-    except Exception:
-        qp = st.experimental_get_query_params()
-        return {k: (v[0] if isinstance(v, list) and v else "") for k, v in qp.items()}
-
-
-def set_query_param(key: str, value: str):
-    try:
-        st.query_params[key] = value
-    except Exception:
-        # Older Streamlit
-        params = st.experimental_get_query_params()
-        params[key] = value
-        st.experimental_set_query_params(**params)
-
-
-def clear_query_params():
-    try:
-        st.query_params.clear()
-    except Exception:
-        st.experimental_set_query_params()
-
-
-def restore_session_from_sid():
-    params = get_query_params()
-    sid = params.get("sid")
-    if not sid:
-        return
-
-    saved = auth_store().get(sid)
-    if not saved:
-        return
-
-    st.session_state.user = {"email": saved["email"]}
-    st.session_state.email = saved["email"]
+PROMPT_ID = "21b23642-6bf2-4777-bef0-394c2aafb071"
 
 
 def main():
@@ -70,9 +38,10 @@ def main():
     # Dev bypass
     with st.sidebar:
         if st.button("Dev: Skip Login"):
-            st.session_state.user = {"email": "dev@test.com"}
+            st.session_state.user = {"email": "dev@test.com", "id": None}
+            st.session_state.supabase_session = None
             sid = uuid.uuid4().hex
-            auth_store()[sid] = {"email": "dev@test.com"}
+            auth_store()[sid] = {"email": "dev@test.com", "user": None, "session": None}
             set_query_param("sid", sid)
             st.rerun()
 
@@ -141,7 +110,11 @@ def main():
                         "session": getattr(response, "session", None),
                     }
 
-                    st.session_state.user = {"email": st.session_state.email}
+                    st.session_state.user = {
+                        "email": st.session_state.email,
+                        "id": getattr(getattr(response, "user", None), "id", None),
+                    }
+                    st.session_state.supabase_session = getattr(response, "session", None)
                     st.session_state.code_sent = False
                     set_query_param("sid", sid)
                     clear_query_params()  # if you want to remove the OTP code from the URL
@@ -161,40 +134,57 @@ def main():
 
         return
 
-    # Rest of page logic once logged in
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "log_file" not in st.session_state:
-        st.session_state.log_file = f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    session = st.session_state.supabase_session
+    access_token = getattr(session, "access_token", None)
+    user_id = st.session_state.user.get("id") if st.session_state.user else None
+
+    if not access_token or not user_id:
+        st.error("A valid Supabase session is required to load and save chats. Please log in with email instead of using the dev bypass.")
+        return
+
+    db = init_authenticated_supabase(access_token)
+
+    try:
+        prompt_question = get_prompt_question(db, PROMPT_ID)
+        active_chat = get_or_create_active_chat(db, user_id, PROMPT_ID)
+        chat_messages = get_chat_messages(db, active_chat["chat_id"])
+    except Exception as e:
+        st.error(f"Error loading exam data: {e}")
+        return
+
+    st.session_state.chat_id = active_chat["chat_id"]
+    st.session_state.messages = [
+        {"role": message["role"], "content": message["content"]}
+        for message in chat_messages
+    ]
 
     st.title("Food Science Lab: Case Study Exam")
     st.subheader("Scenario: The Browning Strawberry Bar")
-    st.info("""
-    **Complaint:** A strawberry bar turns brown and tastes 'toasted' after storage.
-    **Ingredients:** Whey protein, strawberry purée, cane sugar, honey, pH 6.0, Aw 0.55.
-    """)
+    st.info(prompt_question["scenario_text"])
+    st.write(prompt_question["info_text"])
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
     if prompt := st.chat_input("What is your hypothesis or proposed experiment?"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        user_message = {"role": "user", "content": prompt}
+        st.session_state.messages.append(user_message)
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        with open(st.session_state.log_file, "a") as f:
-            f.write(f"USER: {prompt}\n")
-
         try:
-            ai_response = get_gemini_response(prompt)
+            create_chat_message(db, st.session_state.chat_id, "user", prompt)
+            ai_response = get_gemini_response(
+                prompt=prompt,
+                system_instruction=prompt_question["system_instruction"],
+                messages=st.session_state.messages[:-1],
+            )
+            create_chat_message(db, st.session_state.chat_id, "assistant", ai_response)
 
             st.session_state.messages.append({"role": "assistant", "content": ai_response})
             with st.chat_message("assistant"):
                 st.markdown(ai_response)
-
-            with open(st.session_state.log_file, "a") as f:
-                f.write(f"AI: {ai_response}\n\n")
 
         except Exception as e:
             st.error(f"Error calling Gemini: {e}")

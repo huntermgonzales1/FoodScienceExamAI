@@ -39,20 +39,19 @@ CREATE POLICY "instructors view all messages"
 ON chat_message FOR SELECT
 USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
 
--- Role-restricted insert (Prevents students from faking assistant messages)
+
 CREATE POLICY "users insert own messages"
 ON chat_message FOR INSERT
 WITH CHECK (
     EXISTS (
-        SELECT 1 FROM chat 
-        WHERE chat.chat_id = chat_message.chat_id 
-        AND chat.user_id = auth.uid()
-    ) 
-    AND (
-        -- If not an instructor
-        (auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true 
+        SELECT 1
+        FROM chat
+        WHERE chat.chat_id = chat_message.chat_id
+          AND chat.user_id = auth.uid()
     )
+    AND role IN ('user', 'assistant')
 );
+
 
 CREATE POLICY "students read prompts"
 ON prompt_question
