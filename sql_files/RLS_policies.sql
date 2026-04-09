@@ -15,25 +15,27 @@ ON public.allowed_emails FOR SELECT USING (true);
 -- Instructors manage the whitelist and exam prompts
 CREATE POLICY "instructors_manage_whitelist" 
 ON public.allowed_emails FOR ALL 
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
+USING (COALESCE((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean, false));
 
 CREATE POLICY "instructors_manage_prompts" 
 ON public.prompt_question FOR ALL 
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
+USING (COALESCE((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean, false));
 
 -- Authorized students can read exam prompts
 CREATE POLICY "authorized_read_prompts" 
 ON public.prompt_question FOR SELECT 
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_authorized')::boolean = true);
+USING (COALESCE((auth.jwt() -> 'app_metadata' ->> 'is_authorized')::boolean, false));
 
 ----------------------------------------------------------------
 -- USER PROFILES & CHATS
 ----------------------------------------------------------------
--- Users see own profile; Instructors see all
+-- Users see own profile; instructors see all.
+-- Important: this policy must not query public.user_profile inside USING,
+-- or PostgreSQL can raise "infinite recursion detected in policy".
 CREATE POLICY "view_profiles" ON public.user_profile FOR SELECT 
 USING (
     auth.uid() = user_id 
-    OR (auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true
+    OR COALESCE((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean, false)
 );
 
 -- Users manage own chats
@@ -42,7 +44,7 @@ USING (auth.uid() = user_id);
 
 -- Instructors view all chats
 CREATE POLICY "instructors_view_all_chats" ON public.chat FOR SELECT 
-USING ((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean = true);
+USING (COALESCE((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean, false));
 
 -- Messages are visible if you own the parent chat
 CREATE POLICY "view_own_chat_messages" ON public.chat_message FOR SELECT 

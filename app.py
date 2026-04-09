@@ -11,6 +11,7 @@ from database import (
     get_current_chat_for_prompt,
     get_chat_messages,
     get_prompt_question,
+    get_user_is_instructor,
     init_admin_supabase,
     init_authenticated_supabase,
     init_supabase,
@@ -36,6 +37,15 @@ DEFAULT_GRADING_PROMPT = (
 )
 
 
+def render_educator_dashboard():
+    st.title("Educator Dashboard")
+    st.write("Choose an educator action:")
+    st.button("Edit allowed users")
+    st.button("Edit chat prompts")
+    st.button("See student's chats/scores")
+    st.button("Practice a chat")
+
+
 def main():
     st.set_page_config(page_title="Food Science Exam", layout="centered")
     supabase = init_supabase()
@@ -46,14 +56,6 @@ def main():
 
     # Dev bypass
     with st.sidebar:
-        if st.button("Dev: Skip Login"):
-            st.session_state.user = {"email": "dev@test.com", "id": None}
-            st.session_state.supabase_session = None
-            sid = uuid.uuid4().hex
-            auth_store()[sid] = {"email": "dev@test.com", "user": None, "session": None}
-            set_query_param("sid", sid)
-            st.rerun()
-
         if st.session_state.user is not None and st.button("Logout"):
             params = get_query_params()
             sid = params.get("sid")
@@ -62,6 +64,7 @@ def main():
             st.session_state.user = None
             st.session_state.email = ""
             st.session_state.code_sent = False
+            st.session_state.is_instructor = False
             clear_query_params()
             st.rerun()
 
@@ -106,6 +109,7 @@ def main():
                 try:
                     response = verify_login_code(supabase, st.session_state.email, code)
                     user = getattr(response, "user", None)
+                    session = getattr(response, "session", None)
                     
                     # 1. GET THE AUTHORIZATION STATUS FROM METADATA
                     # This matches the 'is_authorized' key we set in the SQL trigger
@@ -118,18 +122,35 @@ def main():
                         st.stop() # Stops execution before any session is saved
 
                     # 3. IF AUTHORIZED, PROCEED
+                    user_id = getattr(user, "id", None)
+                    access_token = getattr(session, "access_token", None)
+                    if not user_id or not access_token:
+                        st.error("Login succeeded but session details are missing. Please try again.")
+                        st.stop()
+
+                    is_instructor = bool(app_metadata.get("is_instructor", False))
+                    try:
+                        db = init_authenticated_supabase(access_token)
+                        is_instructor = get_user_is_instructor(db, user_id)
+                    except Exception:
+                        # Fall back to JWT metadata so login still succeeds if profile RLS is misconfigured.
+                        pass
+
                     sid = uuid.uuid4().hex
                     auth_store()[sid] = {
                         "email": st.session_state.email,
                         "user": user,
-                        "session": getattr(response, "session", None),
+                        "session": session,
+                        "is_instructor": is_instructor,
                     }
 
                     st.session_state.user = {
                         "email": st.session_state.email,
-                        "id": getattr(user, "id", None),
+                        "id": user_id,
+                        "is_instructor": is_instructor,
                     }
-                    st.session_state.supabase_session = getattr(response, "session", None)
+                    st.session_state.supabase_session = session
+                    st.session_state.is_instructor = is_instructor
                     st.session_state.code_sent = False
                     set_query_param("sid", sid)
                     st.rerun()
@@ -152,10 +173,19 @@ def main():
     user_id = st.session_state.user.get("id") if st.session_state.user else None
 
     if not access_token or not user_id:
-        st.error("A valid Supabase session is required to load and save chats. Please log in with email instead of using the dev bypass.")
+        st.error("A valid Supabase session is required to load and save chats. Please log in with email.")
         return
 
     db = init_authenticated_supabase(access_token)
+    is_instructor = bool(
+        st.session_state.user.get("is_instructor", st.session_state.get("is_instructor", False))
+    )
+    st.session_state.is_instructor = is_instructor
+
+    if is_instructor:
+        render_educator_dashboard()
+        return
+
     admin_db = init_admin_supabase()
 
     try:

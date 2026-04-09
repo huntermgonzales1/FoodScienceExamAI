@@ -56,6 +56,20 @@ def verify_login_code(supabase, email: str, code: str):
     )
 
 
+def get_user_is_instructor(supabase, user_id: str) -> bool:
+    response = (
+        supabase.table("user_profile")
+        .select("is_instructor")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    rows = response.data or []
+    if not rows:
+        return False
+    return bool(rows[0].get("is_instructor", False))
+
+
 def get_prompt_question(supabase, prompt_id: str) -> dict:
     response = (
         supabase.table("prompt_question")

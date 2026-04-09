@@ -12,6 +12,8 @@ def init_auth_state():
         st.session_state.code_sent = False
     if "supabase_session" not in st.session_state:
         st.session_state.supabase_session = None
+    if "is_instructor" not in st.session_state:
+        st.session_state.is_instructor = False
 
 
 def get_query_params() -> dict:
@@ -55,6 +57,8 @@ def restore_session_from_sid():
     st.session_state.user = {
         "email": saved["email"],
         "id": getattr(user, "id", None),
+        "is_instructor": bool(saved.get("is_instructor", False)),
     }
     st.session_state.email = saved["email"]
     st.session_state.supabase_session = session
+    st.session_state.is_instructor = bool(saved.get("is_instructor", False))
