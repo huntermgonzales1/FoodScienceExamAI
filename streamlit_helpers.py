@@ -62,3 +62,78 @@ def restore_session_from_sid():
     st.session_state.email = saved["email"]
     st.session_state.supabase_session = session
     st.session_state.is_instructor = bool(saved.get("is_instructor", False))
+
+
+def get_current_sid() -> str | None:
+    sid = get_query_params().get("sid")
+    return sid or None
+
+
+def nav_query_params_with_sid(extra: dict | None = None) -> dict | None:
+    params = {}
+    sid = get_current_sid()
+    if sid:
+        params["sid"] = sid
+    if extra:
+        params.update(extra)
+    return params or None
+
+
+def ensure_session_restored():
+    init_auth_state()
+    if st.session_state.user is None:
+        restore_session_from_sid()
+
+
+def switch_page_with_sid(page: str):
+    st.switch_page(page, query_params=nav_query_params_with_sid())
+
+
+def require_logged_in():
+    ensure_session_restored()
+    if st.session_state.user is None:
+        switch_page_with_sid("pages/login.py")
+        st.stop()
+
+
+def require_instructor():
+    require_logged_in()
+    is_instructor = bool(st.session_state.user.get("is_instructor", False))
+    if not is_instructor:
+        switch_page_with_sid("pages/unauthorized.py")
+        st.stop()
+
+
+def require_student_or_authorized(allow_instructor: bool = True):
+    require_logged_in()
+    is_instructor = bool(st.session_state.user.get("is_instructor", False))
+    if is_instructor and not allow_instructor:
+        switch_page_with_sid("pages/unauthorized.py")
+        st.stop()
+
+
+def logout_and_redirect_to_login():
+    sid = get_current_sid()
+    if sid and sid in auth_store():
+        del auth_store()[sid]
+
+    st.session_state.user = None
+    st.session_state.email = ""
+    st.session_state.code_sent = False
+    st.session_state.supabase_session = None
+    st.session_state.is_instructor = False
+    if "chat_id" in st.session_state:
+        del st.session_state["chat_id"]
+    if "messages" in st.session_state:
+        del st.session_state["messages"]
+
+    clear_query_params()
+    st.switch_page("pages/login.py")
+    st.stop()
+
+
+def render_logout_sidebar():
+    ensure_session_restored()
+    with st.sidebar:
+        if st.session_state.user is not None and st.button("Logout"):
+            logout_and_redirect_to_login()
