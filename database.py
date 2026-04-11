@@ -70,6 +70,38 @@ def get_user_is_instructor(supabase, user_id: str) -> bool:
     return bool(rows[0].get("is_instructor", False))
 
 
+def list_allowed_emails(supabase) -> list[dict]:
+    response = (
+        supabase.table("allowed_emails")
+        .select("email, expiration_date, is_instructor")
+        .order("email")
+        .execute()
+    )
+    return response.data or []
+
+
+def upsert_allowed_email(
+    supabase,
+    email: str,
+    expiration_date: str | None,
+    is_instructor: bool = False,
+) -> dict:
+    response = (
+        supabase.table("allowed_emails")
+        .upsert(
+            {
+                "email": email,
+                "expiration_date": expiration_date,
+                "is_instructor": is_instructor,
+            },
+            on_conflict="email",
+        )
+        .execute()
+    )
+    rows = response.data or []
+    return rows[0] if rows else {}
+
+
 def get_prompt_question(supabase, prompt_id: str) -> dict:
     response = (
         supabase.table("prompt_question")

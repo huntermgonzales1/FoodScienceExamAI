@@ -12,4 +12,5 @@
 | 4/6/2026 | Collaborate, meet with Dr. Kershaw, and improve schema | 1.5 |
 | 4/7/2026 | connect to DB; modularize code; add grading | 3.5 |
 | 4/8/2026 | Debug sign up 500 errors | 2.5 |
-| **Total** | | **22.0** |
+| 4/9/2026 | Add professor sign in; add URLs; meet with IFT | 2.5 |
+| **Total** | | **24.5** |

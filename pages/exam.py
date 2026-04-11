@@ -36,6 +36,8 @@ if not access_token or not user_id:
 db = init_authenticated_supabase(access_token)
 admin_db = init_admin_supabase()
 
+st.page_link("pages/home.py", label="Home", query_params=nav_query_params_with_sid())
+
 try:
     prompt_question = get_prompt_question(db, PROMPT_ID)
     current_chat = get_current_chat_for_prompt(db, user_id, PROMPT_ID)
@@ -121,6 +123,3 @@ with st.sidebar:
                 st.rerun()
             except Exception as e:
                 st.error(f"Error finalizing and grading chat: {e}")
-
-st.divider()
-st.page_link("pages/home.py", label="Home", query_params=nav_query_params_with_sid())
