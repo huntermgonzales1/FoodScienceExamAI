@@ -90,6 +90,33 @@ def _prompt_status_label(prompt: dict, latest_chat: dict | None, today: date) ->
     return "Unavailable"
 
 
+def _pick_default_prompt_id(
+    prompts: list[dict],
+    latest_chat_by_prompt_id: dict[str, dict],
+    today: date,
+) -> str | None:
+    for prompt in prompts:
+        prompt_id = prompt.get("prompt_id")
+        if not prompt_id:
+            continue
+        has_started = prompt_id in latest_chat_by_prompt_id
+        is_active = _is_prompt_currently_available(prompt, today)
+        if has_started and is_active:
+            return prompt_id
+
+    for prompt in prompts:
+        prompt_id = prompt.get("prompt_id")
+        if prompt_id and _is_prompt_currently_available(prompt, today):
+            return prompt_id
+
+    for prompt in prompts:
+        prompt_id = prompt.get("prompt_id")
+        if prompt_id and prompt_id in latest_chat_by_prompt_id:
+            return prompt_id
+
+    return None
+
+
 require_student_or_authorized(allow_instructor=True)
 render_logout_sidebar()
 
@@ -135,11 +162,6 @@ visible_prompts = [
 ]
 visible_prompts.sort(key=_prompt_sort_key)
 
-st.subheader("Select a Case Study")
-if not visible_prompts:
-    st.info("No case studies are currently available.")
-
-prompt_options = [""] + [row["prompt_id"] for row in visible_prompts]
 query_chat_id = get_query_params().get("chat_id")
 
 current_chat = None
@@ -156,7 +178,7 @@ if query_chat_id:
     if current_chat is None:
         st.session_state["exam_warning"] = (
             "The requested chat was not found or you do not have access to it. "
-            "Please choose a case study below."
+            "We selected a default case study for you."
         )
         _set_chat_query_param(None)
         st.rerun()
@@ -165,7 +187,7 @@ if query_chat_id:
     if prompt_question is None:
         st.session_state["exam_warning"] = (
             "The requested chat references a prompt that is no longer visible. "
-            "Please choose another case study."
+            "We selected a default case study for you."
         )
         _set_chat_query_param(None)
         st.rerun()
@@ -176,55 +198,37 @@ if query_chat_id:
         render_backend_error("load selected chat messages", e, key_prefix="exam_selected_messages")
         st.stop()
 
-selected_prompt_default = ""
-if current_chat:
-    selected_prompt_default = current_chat.get("initial_prompt_id", "")
+if current_chat is None:
+    default_prompt_id = _pick_default_prompt_id(
+        visible_prompts,
+        latest_chat_by_prompt_id,
+        today,
+    )
+    if not default_prompt_id:
+        st.info("No case studies are currently available.")
+        st.stop()
 
-if selected_prompt_default not in prompt_options:
-    selected_prompt_default = ""
+    default_existing_chat = latest_chat_by_prompt_id.get(default_prompt_id)
+    if default_existing_chat:
+        _set_chat_query_param(default_existing_chat["chat_id"])
+        st.rerun()
 
-selected_prompt_id = st.selectbox(
-    "Choose a prompt",
-    options=prompt_options,
-    index=prompt_options.index(selected_prompt_default),
-    format_func=lambda prompt_id: (
-        "Choose a case study..."
-        if prompt_id == ""
-        else (
-            f"[{_prompt_status_label(prompt_by_id[prompt_id], latest_chat_by_prompt_id.get(prompt_id), today)}] "
-            f"{_preview(prompt_by_id[prompt_id].get('scenario_text', 'Untitled case study'))}"
-        )
-    ),
-)
+    default_prompt = prompt_by_id.get(default_prompt_id)
+    if default_prompt is None or not _is_prompt_currently_available(default_prompt, today):
+        st.info("No case studies are currently available.")
+        st.stop()
 
-if st.button("Open Selected Chat"):
-    if not selected_prompt_id:
-        st.warning("Select a case study first.")
-    else:
-        selected_prompt = prompt_by_id[selected_prompt_id]
-        selected_existing_chat = latest_chat_by_prompt_id.get(selected_prompt_id)
+    try:
+        created_chat = create_chat(db, user_id, default_prompt_id)
+    except Exception as e:
+        render_backend_error("create default exam chat", e, key_prefix="exam_create_default_chat")
+        st.stop()
 
-        if selected_existing_chat:
-            _set_chat_query_param(selected_existing_chat["chat_id"])
-            st.rerun()
-
-        if not _is_prompt_currently_available(selected_prompt, today):
-            st.info(
-                "This case study is outside its availability window and cannot be "
-                "started now."
-            )
-        else:
-            try:
-                created_chat = create_chat(db, user_id, selected_prompt_id)
-            except Exception as e:
-                render_backend_error("create exam chat", e, key_prefix="exam_create_chat")
-                st.stop()
-
-            _set_chat_query_param(created_chat["chat_id"])
-            st.rerun()
+    _set_chat_query_param(created_chat["chat_id"])
+    st.rerun()
 
 if current_chat is None or prompt_question is None:
-    st.info("Select a case study to load a chat.")
+    st.info("Unable to load a chat right now.")
     st.stop()
 
 st.session_state.chat_id = current_chat["chat_id"]
@@ -286,6 +290,34 @@ if prompt := st.chat_input(
         render_backend_error("send or save chat messages", e, key_prefix="exam_chat")
 
 with st.sidebar:
+    st.header("Case Study")
+    prompt_options = [row["prompt_id"] for row in visible_prompts]
+    current_prompt_id = current_chat.get("initial_prompt_id")
+    selected_prompt_id = st.selectbox(
+        "Switch case study",
+        options=prompt_options,
+        index=prompt_options.index(current_prompt_id),
+        format_func=lambda prompt_id: (
+            f"[{_prompt_status_label(prompt_by_id[prompt_id], latest_chat_by_prompt_id.get(prompt_id), today)}] "
+            f"{_preview(prompt_by_id[prompt_id].get('scenario_text', 'Untitled case study'))}"
+        ),
+    )
+
+    if selected_prompt_id != current_prompt_id:
+        selected_existing_chat = latest_chat_by_prompt_id.get(selected_prompt_id)
+        if selected_existing_chat:
+            _set_chat_query_param(selected_existing_chat["chat_id"])
+            st.rerun()
+
+        try:
+            created_chat = create_chat(db, user_id, selected_prompt_id)
+        except Exception as e:
+            render_backend_error("create exam chat", e, key_prefix="exam_create_chat")
+            st.stop()
+
+        _set_chat_query_param(created_chat["chat_id"])
+        st.rerun()
+
     st.header("Exam Controls")
     if current_chat["status"] == CHAT_STATUS_GRADED:
         st.caption("This attempt has already been finalized and graded.")
