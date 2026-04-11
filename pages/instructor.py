@@ -16,7 +16,9 @@ st.write("Choose an educator action:")
 if st.button("Edit allowed users"):
     switch_page_with_sid("pages/instructor_users.py")
     st.stop()
-st.button("Edit chat prompts")
+if st.button("Edit chat prompts"):
+    switch_page_with_sid("pages/instructor_prompts.py")
+    st.stop()
 st.button("See student's chats/scores")
 if st.button("Practice a chat"):
     switch_page_with_sid("pages/exam.py")

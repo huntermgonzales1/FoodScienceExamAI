@@ -23,6 +23,12 @@ def main():
             visibility="hidden",
         ),
         st.Page(
+            "pages/instructor_prompts.py",
+            title="Instructor Prompts",
+            url_path="instructor-prompts",
+            visibility="hidden",
+        ),
+        st.Page(
             "pages/unauthorized.py",
             title="Unauthorized",
             url_path="unauthorized",

@@ -113,6 +113,54 @@ def get_prompt_question(supabase, prompt_id: str) -> dict:
     return response.data
 
 
+def list_prompt_questions(supabase) -> list[dict]:
+    response = (
+        supabase.table("prompt_question")
+        .select(
+            "prompt_id, scenario_text, info_text, system_instruction, available_date, "
+            "expire_date, order_index, is_practice"
+        )
+        .order("available_date", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
+def save_prompt_question(
+    supabase,
+    scenario_text: str,
+    info_text: str,
+    system_instruction: str,
+    available_date: str,
+    expire_date: str | None,
+    order_index: int | None,
+    is_practice: bool,
+    prompt_id: str | None = None,
+) -> dict:
+    payload = {
+        "scenario_text": scenario_text,
+        "info_text": info_text,
+        "system_instruction": system_instruction,
+        "available_date": available_date,
+        "expire_date": expire_date,
+        "order_index": order_index,
+        "is_practice": is_practice,
+    }
+
+    if prompt_id:
+        payload["prompt_id"] = prompt_id
+        response = (
+            supabase.table("prompt_question")
+            .upsert(payload, on_conflict="prompt_id")
+            .execute()
+        )
+    else:
+        response = supabase.table("prompt_question").insert(payload).execute()
+
+    rows = response.data or []
+    return rows[0] if rows else {}
+
+
 def get_active_chat_for_prompt(supabase, user_id: str, prompt_id: str) -> dict | None:
     response = (
         supabase.table("chat")
