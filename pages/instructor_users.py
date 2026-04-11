@@ -48,12 +48,11 @@ else:
     st.info("No allowed users found.")
 
 st.subheader("Add or Update Allowed User")
-with st.form("upsert_allowed_user_form", clear_on_submit=True):
-    email = st.text_input("Email")
-    is_instructor = st.checkbox("Instructor", value=False)
-    never_expires = st.checkbox("Never expires", value=True)
-    expiration_date = st.date_input("Expiration date", disabled=never_expires)
-    submitted = st.form_submit_button("Save")
+email = st.text_input("Email")
+is_instructor = st.checkbox("Instructor", value=False)
+never_expires = st.checkbox("Never expires", value=True)
+expiration_date = st.date_input("Expiration date", disabled=never_expires)
+submitted = st.button("Save")
 
 if submitted:
     clean_email = email.strip().lower()
