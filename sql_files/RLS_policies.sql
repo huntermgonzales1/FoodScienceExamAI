@@ -56,6 +56,10 @@ USING (
     )
 );
 
+-- Instructors can read all chat messages (for review; no INSERT policy for them)
+CREATE POLICY "instructors_view_all_chat_messages" ON public.chat_message FOR SELECT
+USING (COALESCE((auth.jwt() -> 'app_metadata' ->> 'is_instructor')::boolean, false));
+
 -- Users can only insert messages into their own active chats
 CREATE POLICY "insert_own_messages" ON public.chat_message FOR INSERT 
 WITH CHECK (

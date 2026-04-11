@@ -1,6 +1,9 @@
 import streamlit as st
 
+from chat_display import render_readonly_chat_transcript
 from database import (
+    get_chat_messages,
+    get_chat_optional,
     init_authenticated_supabase,
     list_chats,
     list_prompt_questions,
@@ -138,3 +141,88 @@ if selected_student:
         )
     else:
         st.info("No chats found for this student.")
+
+st.subheader("View conversation")
+rows_for_transcript_picker = full_rows
+if selected_scenario:
+    rows_for_transcript_picker = [
+        row for row in rows_for_transcript_picker if row.get("prompt_id") == selected_scenario
+    ]
+if selected_student:
+    rows_for_transcript_picker = [
+        row for row in rows_for_transcript_picker if row.get("student_email") == selected_student
+    ]
+
+filter_parts = []
+if selected_scenario:
+    filter_parts.append(
+        "scenario: "
+        + _preview(
+            prompt_by_id.get(selected_scenario, {}).get("scenario_text", "Unknown scenario")
+        )
+    )
+if selected_student:
+    filter_parts.append(f"student: {selected_student}")
+if filter_parts:
+    st.caption("Chat list matches your filters above (" + " · ".join(filter_parts) + ").")
+else:
+    st.caption(
+        "Chat list includes every chat. Use the scenario and/or student filters above to narrow this list."
+    )
+
+row_by_chat_id = {
+    row.get("chat_id"): row for row in rows_for_transcript_picker if row.get("chat_id")
+}
+view_chat_options = [""] + [
+    row["chat_id"] for row in rows_for_transcript_picker if row.get("chat_id")
+]
+
+
+def _format_view_chat_option(chat_id: str) -> str:
+    if not chat_id:
+        return "Choose a chat to view the full transcript..."
+    row = row_by_chat_id.get(chat_id, {})
+    email = row.get("student_email", "Unknown")
+    preview = row.get("scenario_preview", "")
+    created = row.get("created_date", "")
+    return f"{email} · {preview} · {created}"
+
+
+_picker_key = (
+    f"instructor_view_chat_{selected_scenario or 'all'}_{selected_student or 'all'}"
+)
+selected_view_chat_id = st.selectbox(
+    "Select a student's chat",
+    options=view_chat_options,
+    format_func=_format_view_chat_option,
+    key=_picker_key,
+)
+
+if selected_view_chat_id:
+    chat_row = get_chat_optional(db, selected_view_chat_id)
+    if not chat_row:
+        st.warning("That chat was not found.")
+    else:
+        prompt_question = prompt_by_id.get(chat_row.get("initial_prompt_id"))
+        if not prompt_question:
+            st.warning("The scenario for this chat is missing or no longer available.")
+        else:
+            try:
+                raw_messages = get_chat_messages(db, selected_view_chat_id)
+            except Exception as e:
+                render_backend_error(
+                    "load chat messages",
+                    e,
+                    key_prefix="instructor_chats_messages",
+                )
+                st.stop()
+            messages = [
+                {"role": m["role"], "content": m["content"]}
+                for m in raw_messages
+            ]
+            render_readonly_chat_transcript(
+                prompt_question,
+                messages,
+                chat_row,
+                show_instructor_readonly_caption=True,
+            )

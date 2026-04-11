@@ -297,6 +297,18 @@ def get_chat(supabase, chat_id: str) -> dict:
     return response.data
 
 
+def get_chat_optional(supabase, chat_id: str) -> dict | None:
+    response = (
+        supabase.table("chat")
+        .select("*")
+        .eq("chat_id", chat_id)
+        .limit(1)
+        .execute()
+    )
+    rows = response.data or []
+    return rows[0] if rows else None
+
+
 def create_chat_message(supabase, chat_id: str, role: str, content: str) -> dict:
     response = (
         supabase.table("chat_message")

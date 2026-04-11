@@ -23,6 +23,7 @@ from streamlit_helpers import (
     render_logout_sidebar,
     require_student_or_authorized,
 )
+from chat_display import render_readonly_chat_transcript
 from tools import get_gemini_response, grade_chat_with_gemini
 
 DEFAULT_GRADING_PROMPT = (
@@ -241,17 +242,13 @@ prompt_is_available = _is_prompt_currently_available(prompt_question, today)
 chat_is_active = current_chat.get("status") == CHAT_STATUS_ACTIVE
 can_continue = prompt_is_available and chat_is_active
 
-st.subheader("Scenario")
-st.info(prompt_question["scenario_text"])
-st.write(prompt_question["info_text"])
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+render_readonly_chat_transcript(
+    prompt_question,
+    st.session_state.messages,
+    current_chat,
+)
 
 if current_chat["status"] == CHAT_STATUS_GRADED:
-    st.success(f"Final grade: {current_chat['final_grade']}/10")
-    st.write(current_chat["grade_justification"])
     st.info(
         "This exam attempt has been finalized and can no longer receive new "
         "messages."
