@@ -249,6 +249,20 @@ def list_chats(supabase) -> list[dict]:
     return response.data or []
 
 
+def list_user_chats(supabase, user_id: str) -> list[dict]:
+    response = (
+        supabase.table("chat")
+        .select(
+            "chat_id, user_id, initial_prompt_id, created_at, final_grade, "
+            "grade_justification, status"
+        )
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
 def list_user_profiles(supabase) -> list[dict]:
     response = (
         supabase.table("user_profile")
@@ -257,6 +271,19 @@ def list_user_profiles(supabase) -> list[dict]:
         .execute()
     )
     return response.data or []
+
+
+def get_user_chat_by_id(supabase, user_id: str, chat_id: str) -> dict | None:
+    response = (
+        supabase.table("chat")
+        .select("*")
+        .eq("chat_id", chat_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    rows = response.data or []
+    return rows[0] if rows else None
 
 
 def get_chat(supabase, chat_id: str) -> dict:
