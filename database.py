@@ -236,6 +236,29 @@ def get_chat_messages(supabase, chat_id: str) -> list[dict]:
     return response.data or []
 
 
+def list_chats(supabase) -> list[dict]:
+    response = (
+        supabase.table("chat")
+        .select(
+            "chat_id, user_id, initial_prompt_id, created_at, final_grade, "
+            "grade_justification, status"
+        )
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
+def list_user_profiles(supabase) -> list[dict]:
+    response = (
+        supabase.table("user_profile")
+        .select("user_id, email")
+        .order("email")
+        .execute()
+    )
+    return response.data or []
+
+
 def get_chat(supabase, chat_id: str) -> dict:
     response = (
         supabase.table("chat")

@@ -1,3 +1,5 @@
+import ast
+
 import streamlit as st
 
 from database import auth_store
@@ -137,3 +139,71 @@ def render_logout_sidebar():
     with st.sidebar:
         if st.session_state.user is not None and st.button("Logout"):
             logout_and_redirect_to_login()
+
+
+def _parse_error_payload(error: Exception) -> dict:
+    payload = {}
+    raw_text = str(error)
+
+    # Supabase errors sometimes expose a dict-like string:
+    # {'message': 'JWT expired', 'code': 'PGRST303', ...}
+    if raw_text.startswith("{") and raw_text.endswith("}"):
+        try:
+            possible_payload = ast.literal_eval(raw_text)
+            if isinstance(possible_payload, dict):
+                payload = possible_payload
+        except (ValueError, SyntaxError):
+            pass
+
+    if not payload:
+        for key in ("message", "code", "hint", "details"):
+            value = getattr(error, key, None)
+            if value:
+                payload[key] = value
+
+    if not payload:
+        payload["message"] = raw_text
+
+    return payload
+
+
+def is_jwt_expired_error(error: Exception) -> bool:
+    payload = _parse_error_payload(error)
+    code = str(payload.get("code", "")).strip().upper()
+    message = str(payload.get("message", "")).strip().lower()
+    raw_text = str(error).strip().lower()
+
+    if code == "PGRST303":
+        return True
+    return "jwt expired" in message or "jwt expired" in raw_text
+
+
+def render_backend_error(action: str, error: Exception, key_prefix: str = "backend_error"):
+    payload = _parse_error_payload(error)
+
+    if is_jwt_expired_error(error):
+        st.error("Your login session expired while this page was open.")
+        st.info("To continue: 1) click logout, 2) sign in again, 3) reopen this page.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Logout and go to Login", key=f"{key_prefix}_logout"):
+                logout_and_redirect_to_login()
+        with col2:
+            st.page_link(
+                "pages/login.py",
+                label="Go to Login",
+                query_params=nav_query_params_with_sid(),
+            )
+    else:
+        st.error(f"Error trying to {action}.")
+
+    with st.expander("Technical Details"):
+        st.code(
+            (
+                f"Action: {action}\n"
+                f"Message: {payload.get('message', 'Unknown error')}\n"
+                f"Code: {payload.get('code', 'N/A')}\n"
+                f"Hint: {payload.get('hint', 'N/A')}\n"
+                f"Details: {payload.get('details', 'N/A')}"
+            )
+        )

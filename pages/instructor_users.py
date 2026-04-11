@@ -4,6 +4,7 @@ from datetime import date
 from database import init_authenticated_supabase, list_allowed_emails, upsert_allowed_email
 from streamlit_helpers import (
     nav_query_params_with_sid,
+    render_backend_error,
     render_logout_sidebar,
     require_instructor,
 )
@@ -30,7 +31,7 @@ db = init_authenticated_supabase(access_token)
 try:
     rows = list_allowed_emails(db)
 except Exception as e:
-    st.error(f"Error loading allowed users: {e}")
+    render_backend_error("load allowed users", e, key_prefix="instructor_users_load")
     st.stop()
 
 rows_by_email = {row.get("email", ""): row for row in rows if row.get("email")}
@@ -121,4 +122,4 @@ if submitted:
         st.success(f"Saved allowed user: {clean_email}")
         st.rerun()
     except Exception as e:
-        st.error(f"Error saving allowed user: {e}")
+        render_backend_error("save allowed user", e, key_prefix="instructor_users_save")

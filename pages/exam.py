@@ -11,7 +11,12 @@ from database import (
     init_authenticated_supabase,
     update_chat_grade,
 )
-from streamlit_helpers import nav_query_params_with_sid, render_logout_sidebar, require_student_or_authorized
+from streamlit_helpers import (
+    nav_query_params_with_sid,
+    render_backend_error,
+    render_logout_sidebar,
+    require_student_or_authorized,
+)
 from tools import get_gemini_response, grade_chat_with_gemini
 
 PROMPT_ID = "21b23642-6bf2-4777-bef0-394c2aafb071"
@@ -43,7 +48,7 @@ try:
     current_chat = get_current_chat_for_prompt(db, user_id, PROMPT_ID)
     chat_messages = get_chat_messages(db, current_chat["chat_id"])
 except Exception as e:
-    st.error(f"Error loading exam data: {e}")
+    render_backend_error("load exam data", e, key_prefix="exam_load")
     st.stop()
 
 st.session_state.chat_id = current_chat["chat_id"]
@@ -95,7 +100,7 @@ if prompt := st.chat_input(
             st.markdown(ai_response)
 
     except Exception as e:
-        st.error(f"Error calling Gemini: {e}")
+        render_backend_error("send or save chat messages", e, key_prefix="exam_chat")
 
 with st.sidebar:
     st.header("Exam Controls")
@@ -122,4 +127,4 @@ with st.sidebar:
                 )
                 st.rerun()
             except Exception as e:
-                st.error(f"Error finalizing and grading chat: {e}")
+                render_backend_error("finalize and grade chat", e, key_prefix="exam_grade")

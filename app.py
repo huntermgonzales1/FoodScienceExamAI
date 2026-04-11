@@ -29,6 +29,12 @@ def main():
             visibility="hidden",
         ),
         st.Page(
+            "pages/instructor_chats.py",
+            title="Instructor Chats",
+            url_path="instructor-chats",
+            visibility="hidden",
+        ),
+        st.Page(
             "pages/unauthorized.py",
             title="Unauthorized",
             url_path="unauthorized",

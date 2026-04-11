@@ -6,6 +6,7 @@ import streamlit as st
 from database import init_authenticated_supabase, list_prompt_questions, save_prompt_question
 from streamlit_helpers import (
     nav_query_params_with_sid,
+    render_backend_error,
     render_logout_sidebar,
     require_instructor,
 )
@@ -46,7 +47,7 @@ db = init_authenticated_supabase(access_token)
 try:
     rows = list_prompt_questions(db)
 except Exception as e:
-    st.error(f"Error loading prompts: {e}")
+    render_backend_error("load prompts", e, key_prefix="instructor_prompts_load")
     st.stop()
 
 rows_by_id = {row.get("prompt_id", ""): row for row in rows if row.get("prompt_id")}
@@ -202,4 +203,4 @@ if submitted:
         st.success("Prompt saved.")
         st.rerun()
     except Exception as e:
-        st.error(f"Error saving prompt: {e}")
+        render_backend_error("save prompt", e, key_prefix="instructor_prompts_save")
