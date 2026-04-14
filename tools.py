@@ -1,9 +1,10 @@
 import json
 
+import streamlit as st
 from google import genai
 
 
-client = genai.Client()
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash"
 GRADE_RESPONSE_SCHEMA = {
     "type": "object",
