@@ -13,5 +13,7 @@
 | 4/7/2026 | connect to DB; modularize code; add grading | 3.5 |
 | 4/8/2026 | Debug sign up 500 errors | 2.5 |
 | 4/9/2026 | Add professor sign in; add URLs; meet with IFT | 2.5 |
-| 4/11/2026 | View chats, add users, add new prompts in professor view | 2 |
-| **Total** | | **26.5** |
+| 4/11/2026 | View chats, add users, add new prompts in professor view | 3 |
+| 4/13/2026 | Present and collaboration in class | 1.5 |
+| 4/14/2026 | return to instructor mode, and deploy to web | 1 |
+| **Total** | | **29.0** |

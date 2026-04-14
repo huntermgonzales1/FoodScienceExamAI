@@ -22,6 +22,7 @@ from streamlit_helpers import (
     render_backend_error,
     render_logout_sidebar,
     require_student_or_authorized,
+    switch_page_with_sid,
 )
 from chat_display import render_readonly_chat_transcript
 from tools import get_gemini_response, grade_chat_with_gemini
@@ -287,6 +288,11 @@ if prompt := st.chat_input(
         render_backend_error("send or save chat messages", e, key_prefix="exam_chat")
 
 with st.sidebar:
+    if st.session_state.user and st.session_state.user.get("is_instructor"):
+        if st.button("Go back to instructor mode", key="exam_back_instructor"):
+            switch_page_with_sid("pages/instructor.py")
+            st.stop()
+        st.divider()
     st.header("Case Study")
     prompt_options = [row["prompt_id"] for row in visible_prompts]
     current_prompt_id = current_chat.get("initial_prompt_id")
