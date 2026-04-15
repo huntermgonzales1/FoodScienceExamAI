@@ -16,13 +16,6 @@ def init_supabase():
     )
 
 
-@st.cache_resource
-def auth_store():
-    # Server-side session store for this Streamlit process.
-    # Key: session_id, Value: dict with user/session info.
-    return {}
-
-
 def init_authenticated_supabase(access_token: str):
     options = SyncClientOptions(
         headers={"Authorization": f"Bearer {access_token}"},

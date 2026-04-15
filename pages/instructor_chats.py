@@ -10,7 +10,7 @@ from database import (
     list_user_profiles,
 )
 from streamlit_helpers import (
-    nav_query_params_with_sid,
+    nav_query_params,
     render_backend_error,
     render_logout_sidebar,
     require_instructor,
@@ -48,7 +48,7 @@ render_logout_sidebar()
 st.page_link(
     "pages/instructor.py",
     label="Back to Instructor Dashboard",
-    query_params=nav_query_params_with_sid(),
+    query_params=nav_query_params(),
 )
 st.title("Student Chats and Scores")
 
@@ -56,7 +56,7 @@ session = st.session_state.supabase_session
 access_token = getattr(session, "access_token", None)
 if not access_token:
     st.error("A valid Supabase session is required. Please log in again.")
-    st.page_link("pages/login.py", label="Go to Login", query_params=nav_query_params_with_sid())
+    st.page_link("pages/login.py", label="Go to Login", query_params=nav_query_params())
     st.stop()
 
 db = init_authenticated_supabase(access_token)

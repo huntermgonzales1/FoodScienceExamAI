@@ -84,10 +84,18 @@ SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "your-anon-public-key"
 SUPABASE_SECRET_KEY = "your-service-role-key"
 GEMINI_API_KEY = "your-google-genai-api-key"
+
+# Optional — auth cookie names and lifetime (defaults shown)
+# COOKIE_PREFIX = "fsea"
+# AUTH_COOKIE_MAX_AGE = 604800
 ```
 
 - `SUPABASE_PUBLISHABLE_KEY`: Supabase **anon** `public` key (safe for browser-facing clients; still keep it out of public repos if you can).
 - `SUPABASE_SECRET_KEY`: **service_role** key — treat as root access; only on the server / Streamlit secrets, never in client-only code.
+- `COOKIE_PREFIX` (optional): Prefix for browser cookie names that store Supabase tokens (`{prefix}_sb_access`, `{prefix}_sb_refresh`). Default `fsea`.
+- `AUTH_COOKIE_MAX_AGE` (optional): Cookie lifetime in seconds for those tokens. Default `604800` (7 days). Tokens are **not** `HttpOnly` (Streamlit component limitation); use a duration you are comfortable with.
+
+Auth persistence uses [streamlit-cookies-controller](https://discuss.streamlit.io/t/new-component-streamlit-cookies-controller/64251) so a full page refresh can restore the Supabase session without putting secrets in the URL.
 
 ## Deploy to Streamlit Community Cloud
 
@@ -111,6 +119,7 @@ After deploy, complete a full login test with a whitelisted email.
 | `database.py` | Supabase client helpers and data access |
 | `tools.py` | Gemini chat + structured grading |
 | `streamlit_helpers.py` | Session, query params, navigation helpers |
+| `cookie_auth.py` | Browser cookies for Supabase session restore after refresh |
 | `pages/` | UI for home, login, exam, instructor tools |
 | `sql_files/` | Database schema, triggers, RLS, indexes |
 

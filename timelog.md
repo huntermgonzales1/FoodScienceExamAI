@@ -15,5 +15,5 @@
 | 4/9/2026 | Add professor sign in; add URLs; meet with IFT | 2.5 |
 | 4/11/2026 | View chats, add users, add new prompts in professor view | 3 |
 | 4/13/2026 | Present and collaboration in class | 1.5 |
-| 4/14/2026 | return to instructor mode, and deploy to web | 1 |
-| **Total** | | **29.0** |
+| 4/14/2026 | return to instructor mode, and deploy to web | 2 |
+| **Total** | | **30.0** |

@@ -1,37 +1,41 @@
-import uuid
-
 import streamlit as st
 
 from database import (
-    auth_store,
     get_user_is_instructor,
     init_authenticated_supabase,
     init_supabase,
     send_login_code,
     verify_login_code,
 )
+from cookie_auth import consume_auth_debug_message, save_auth_cookies
 from streamlit_helpers import (
     ensure_session_restored,
-    nav_query_params_with_sid,
+    nav_query_params,
     render_logout_sidebar,
 )
 
 ensure_session_restored()
+
+_auth_restore_debug = consume_auth_debug_message()
+if _auth_restore_debug:
+    with st.expander("Sign-in could not be restored automatically (copy for debugging)", expanded=True):
+        st.caption("This usually appears after a refresh if cookies or Supabase rejected the session.")
+        st.code(_auth_restore_debug, language="text")
 
 if st.session_state.user is not None:
     render_logout_sidebar()
     st.title("Already Logged In")
     is_instructor = bool(st.session_state.user.get("is_instructor", False))
     st.info("Your session is active.")
-    st.page_link("pages/home.py", label="Go to Home", query_params=nav_query_params_with_sid())
+    st.page_link("pages/home.py", label="Go to Home", query_params=nav_query_params())
     if is_instructor:
         st.page_link(
             "pages/instructor.py",
             label="Go to Instructor Dashboard",
-            query_params=nav_query_params_with_sid(),
+            query_params=nav_query_params(),
         )
     else:
-        st.page_link("pages/exam.py", label="Go to Exam", query_params=nav_query_params_with_sid())
+        st.page_link("pages/exam.py", label="Go to Exam", query_params=nav_query_params())
     st.stop()
 
 supabase = init_supabase()
@@ -97,14 +101,6 @@ with col1:
                 # Fall back to JWT metadata so login still succeeds if profile RLS is misconfigured.
                 pass
 
-            sid = uuid.uuid4().hex
-            auth_store()[sid] = {
-                "email": st.session_state.email,
-                "user": user,
-                "session": session,
-                "is_instructor": is_instructor,
-            }
-
             st.session_state.user = {
                 "email": st.session_state.email,
                 "id": user_id,
@@ -114,8 +110,10 @@ with col1:
             st.session_state.is_instructor = is_instructor
             st.session_state.code_sent = False
 
+            save_auth_cookies(session)
+
             target = "pages/instructor.py" if is_instructor else "pages/exam.py"
-            st.switch_page(target, query_params={"sid": sid})
+            st.switch_page(target)
         except Exception as e:
             st.error(f"Login failed: {e}")
 

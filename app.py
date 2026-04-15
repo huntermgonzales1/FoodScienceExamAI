@@ -1,8 +1,12 @@
 import streamlit as st
 
+from cookie_auth import render_cookie_controller_ui, reset_run_cookie_controller
+
 
 def main():
+    reset_run_cookie_controller()
     st.set_page_config(page_title="Food Science Exam", layout="centered")
+    render_cookie_controller_ui()
     pages = [
         st.Page("pages/home.py", title="Home", url_path="", default=True, visibility="hidden"),
         st.Page("pages/login.py", title="Login", url_path="login", visibility="hidden"),

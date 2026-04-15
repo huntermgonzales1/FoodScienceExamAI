@@ -18,11 +18,10 @@ from database import (
 )
 from streamlit_helpers import (
     get_query_params,
-    nav_query_params_with_sid,
+    nav_query_params,
     render_backend_error,
     render_logout_sidebar,
     require_student_or_authorized,
-    switch_page_with_sid,
 )
 from chat_display import render_readonly_chat_transcript
 from tools import get_gemini_response, grade_chat_with_gemini
@@ -70,7 +69,7 @@ def _prompt_sort_key(prompt: dict) -> tuple:
 
 def _set_chat_query_param(chat_id: str | None):
     extra = {"chat_id": chat_id} if chat_id else None
-    params = nav_query_params_with_sid(extra=extra) or {}
+    params = nav_query_params(extra=extra) or {}
 
     try:
         st.query_params.clear()
@@ -128,13 +127,13 @@ user_id = st.session_state.user.get("id") if st.session_state.user else None
 
 if not access_token or not user_id:
     st.error("A valid Supabase session is required to load and save chats. Please log in with email.")
-    st.page_link("pages/login.py", label="Go to Login", query_params=nav_query_params_with_sid())
+    st.page_link("pages/login.py", label="Go to Login", query_params=nav_query_params())
     st.stop()
 
 db = init_authenticated_supabase(access_token)
 admin_db = init_admin_supabase()
 
-st.page_link("pages/home.py", label="Home", query_params=nav_query_params_with_sid())
+st.page_link("pages/home.py", label="Home", query_params=nav_query_params())
 st.title("Food Science Lab: Case Study Exam")
 
 pending_warning = st.session_state.pop("exam_warning", None)
@@ -290,7 +289,7 @@ if prompt := st.chat_input(
 with st.sidebar:
     if st.session_state.user and st.session_state.user.get("is_instructor"):
         if st.button("Go back to instructor mode", key="exam_back_instructor"):
-            switch_page_with_sid("pages/instructor.py")
+            st.switch_page("pages/instructor.py")
             st.stop()
         st.divider()
     st.header("Case Study")
